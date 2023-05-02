@@ -14,15 +14,18 @@ use Laminas\Ldap\Ldap;
  * Original implementation provided by ThaDafinser: https://gist.github.com/ThaDafinser/1d081bed8e5e6505e97bedf5863a187c
  * See also: https://github.com/zendframework/zend-ldap/issues/41
  *
- * This uses the ldap_control_paged_result() and ldap_control_paged_result_response() functions to request multiple
- * pages of data from LDAP as needed, to ensure that the end result is everything that matches the requested filter,
- * regardless of the maximum page size set by the LDAP server.
+ * The original implementation relied on ldap_control_paged_result() and ldap_control_paged_result_response() functions to
+ * request multiple pages of data from LDAP as needed. As of PHP 8, both functions have been deprecated in favour of passing
+ * control parameters to ldap_search(). The call to ldap_search() will update the control parameters with a cookie which can
+ * be passed on a subsequent request to get further data.
+ * @see https://www.php.net/manual/en/function.ldap-control-paged-result.php
  *
  * Note: The page size attribute provided to this class must be less than the LDAP server's page size, or objects may
  * still be missing from results.
  */
 final class LDAPIterator implements Iterator
 {
+
     private $ldap;
     private $filter;
     private $baseDn;
@@ -31,12 +34,14 @@ final class LDAPIterator implements Iterator
     private $resolveRangedAttributes;
     private $entries;
     private $current;
+
     /**
      * Required for paging
      *
      * @var unknown
      */
     private $currentResult;
+
     /**
      * Required for paging
      *
@@ -114,31 +119,49 @@ final class LDAPIterator implements Iterator
             $baseDn = $ldap->getBaseDn();
         }
 
-        ldap_control_paged_result($resource, $this->getPageSize(), true, $this->cookie);
-        if ($this->getReturnAttributes() !== null) {
-            $resultResource = ldap_search($resource, $baseDn ?? '', $this->getFilter() ?? '', $this->getReturnAttributes() ?? []);
-        } else {
-            $resultResource = ldap_search($resource, $baseDn ?? '', $this->getFilter() ?? '');
-        }
-        if (! is_resource($resultResource)) {
+        $controls = [[
+            'oid'        => LDAP_CONTROL_PAGEDRESULTS,
+            'isCritical' => true,
+            'value'      => ['size' => $this->getPageSize(), 'cookie' => $this->cookie],
+        ]];
+
+        $result = ldap_search(
+            $resource,
+            $baseDn ?? '',
+            $this->getFilter() ?? '',
+            $this->getReturnAttributes(),
+            0,
+            0,
+            0,
+            LDAP_DEREF_NEVER,
+            $controls
+        );
+
+        if ($result === false) {
             /*
              * @TODO better exception msg
              */
             throw new \Exception('ldap_search returned something wrong...' . ldap_error($resource));
         }
 
-        $entries = ldap_get_entries($resource, $resultResource);
-        if ($entries === false) {
-            throw new LdapException($ldap, 'Entries could not get fetched');
+        ldap_parse_result($resource, $result, $errcode, $matcheddn, $errmsg, $referrals, $controls);
+
+        if ($errcode !== 0) {
+            throw new LdapException($ldap, 'Result could not be parsed');
         }
+
+        $entries = ldap_get_entries($resource, $result);
+
+        if ($entries === false) {
+            throw new LdapException($ldap, 'Entries could not be fetched');
+        }
+
         $entries = $this->getConvertedEntries($entries);
 
-        ErrorHandler::start();
-        $response = ldap_control_paged_result_response($resource, $resultResource, $this->cookie);
-        ErrorHandler::stop();
-
-        if ($response !== true) {
-            throw new LdapException($ldap, 'Paged result was empty');
+        if (isset($controls[LDAP_CONTROL_PAGEDRESULTS]['value']['cookie'])) {
+            $this->cookie = $controls[LDAP_CONTROL_PAGEDRESULTS]['value']['cookie'];
+        } else {
+            $this->cookie = '';
         }
 
         if ($this->entries === null) {
@@ -149,6 +172,7 @@ final class LDAPIterator implements Iterator
 
         return true;
     }
+
     private function getConvertedEntries(array $entries)
     {
         $result = [];
