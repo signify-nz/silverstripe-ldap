@@ -538,7 +538,8 @@ class LDAPService implements Flushable
                 // a attribute we're expecting is missing from the LDAP response
                 if ($this->config()->get("reset_missing_attributes")) {
                     // (Destructive) Reset the corresponding attribute on our side if instructed to do so.
-                    if (method_exists($member->$field, "delete")
+                    if ((is_object($member->$field) || is_string($member->$field))
+                        && method_exists($member->$field, "delete")
                         && method_exists($member->$field, "deleteFile")
                         && $member->$field->exists()
                     ) {
