@@ -58,7 +58,7 @@ class LDAPGroupSyncTask extends BuildTask
      */
     public function run($request)
     {
-        ini_set('max_execution_time', 900);
+        ini_set('max_execution_time', -1);
 
         // get all groups from LDAP, but only get the attributes we need.
         // this is useful to avoid holding onto too much data in memory

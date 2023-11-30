@@ -59,8 +59,8 @@ class LDAPMemberSyncTask extends BuildTask
      */
     public function run($request)
     {
-        ini_set('max_execution_time', 3600); // 3600s = 1hr
-        ini_set('memory_limit', '1024M'); // 1GB memory limit
+        ini_set('max_execution_time', -1); // 3600s = 1hr
+        ini_set('memory_limit', '2048M'); // 1GB memory limit
 
         // get all users from LDAP, but only get the attributes we need.
         // this is useful to avoid holding onto too much data in memory
