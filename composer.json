@@ -25,9 +25,9 @@
         "silverstripe/framework": "^4.10",
         "silverstripe/cms": "^4.1",
         "symbiote/silverstripe-queuedjobs": "^4.1",
-        "laminas/laminas-ldap": "^2.17.0",
-        "laminas/laminas-authentication": "^2.13.0",
-        "laminas/laminas-session": "^2.16.0"
+        "laminas/laminas-ldap": "^2.18.1",
+        "laminas/laminas-authentication": "^2.16.0",
+        "laminas/laminas-session": "^2.20.0"
     },
     "require-dev": {
         "phpunit/phpunit": "^9.5",
